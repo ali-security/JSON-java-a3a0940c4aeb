@@ -117,4 +117,81 @@ public class Util {
             );
         }
     }
+
+    /**
+     * Builds a string made of <code>depth</code> unclosed <code>&lt;a&gt;</code>
+     * tags, i.e. an XML document nested <code>depth</code> levels deep.
+     * @param depth the number of nested opening tags
+     * @return the deeply nested XML text
+     */
+    public static String deeplyNestedOpeningTags(int depth) {
+        StringBuilder sb = new StringBuilder(depth * 3);
+        for (int i = 0; i < depth; i++) {
+            sb.append("<a>");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Builds a well-formed XML document made of <code>depth</code> nested
+     * <code>&lt;a&gt;</code> elements.
+     * @param depth the number of nested elements
+     * @return the nested, well-formed XML text
+     */
+    public static String deeplyNestedWellFormedXml(int depth) {
+        StringBuilder sb = new StringBuilder(depth * 7);
+        sb.append(deeplyNestedOpeningTags(depth));
+        for (int i = 0; i < depth; i++) {
+            sb.append("</a>");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Runs the given code on a dedicated thread with a large (8 MiB) stack and
+     * returns whatever it threw. The test suite may be run with a small stack
+     * (for example -Xss512k), where a few hundred levels of recursive parsing
+     * can exhaust the stack before a nesting depth limit is reached; running on
+     * a large stack lets a test tell the parser's depth limit apart from a
+     * StackOverflowError.
+     * @param runnable the code to run
+     * @return the Throwable thrown by the code, or null if it completed normally
+     */
+    public static Throwable throwableFromLargeStack(final Runnable runnable) {
+        final Throwable[] thrown = new Throwable[1];
+        Thread thread = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    runnable.run();
+                } catch (Throwable t) {
+                    thrown[0] = t;
+                }
+            }
+        }, "large-stack-test", 8L * 1024L * 1024L);
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting for the large stack thread: " + e);
+        }
+        return thrown[0];
+    }
+
+    /**
+     * Asserts that the given Throwable is the JSONException raised when the
+     * maximum nesting depth is reached.
+     * @param thrown the Throwable that was thrown, or null if none was thrown
+     * @param maxNestingDepth the expected maximum nesting depth
+     */
+    public static void assertMaxNestingDepthReached(Throwable thrown, int maxNestingDepth) {
+        if (thrown == null) {
+            fail("Expecting a JSONException");
+        }
+        assertTrue("Wrong throwable thrown: expecting a JSONException but got <" + thrown + ">",
+                thrown instanceof JSONException);
+        assertTrue("Wrong throwable thrown: not expecting message <" + thrown.getMessage() + ">",
+                thrown.getMessage().startsWith("Maximum nesting depth of " + maxNestingDepth));
+    }
 }
